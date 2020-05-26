@@ -1,6 +1,6 @@
-~ test1 = Ramp 100
-+ sum1
-~ test2 = Sine 100
-test1 -> sum1
-test2 -> sum1
-
+Add a
+Mul m
+Int i
+i a
+i i
+a m

@@ -15,7 +15,7 @@ executable banana
   hs-source-dirs:      src
   main-is:             Bananas.hs
   default-language:    Haskell2010
-  ghc-options:        -O2
+  ghc-options:        -O2, -fwarn-incomplete-patterns
   build-depends:       base >= 4.7 && < 5,
                        wave,
                        algebraic-graphs,

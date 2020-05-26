@@ -2,23 +2,45 @@
 
 module Module where
 
+
+-- IMPORTS
+
 import Control.Lens hiding (Const)
 import qualified Data.Sequence as S
 
--- The value of a sample is limited to the range [-1.0, 1.0]
+
 type Sample = Float 
 
+
+-- The value of a sample is limited to the range [-1.0, 1.0]
+-- Clamp function gets applied anytime we evaluate 
+
+clamp :: Sample -> Sample
+clamp = min 1.0 . max (-1.0)
+
+
 -- Module Types
+
 data MType
   = Constant
   | Adder
   | Multiplier
   | Inverter
+  | Absolute
   | Integrator
   | Differentiator
   | Delay
   | Output
   deriving (Show, Eq)
+
+
+-- All modules share the same underlying representation.
+-- Output is at the front of the buffer. 
+-- Buffers may be used for other purposes: for example, the delay module 
+-- uses its buffer to store prior values, and the output module holds
+-- the entire output buffer.
+-- The mType tag determines the evaluation function associated with a module.
+-- Modules are considered equal if their mID fields match.
 
 data Module = Module
   { _buffer :: S.Seq Sample -- Output buffer
@@ -29,42 +51,32 @@ data Module = Module
 
 makeLenses ''Module
 
--- Modules are considered equal if their ID's match
 instance Eq Module where
   (==) m1 m2 =
-    m1^.mID == m2^.mid
+    m1^.mID == m2^.mID
 
-
--- Change state of a module on input
-eval :: [Sample] -> Module -> Module
-eval ss m
-  | null ss = m -- No incoming connections
-  | otherwise = case m^.mType of
-      Constant        -> m
-      Adder           -> evalAdd ss m 
-      Multiplier      -> evalMul ss m 
-      Inverter        -> evalInv (head ss) m
-      Integrator      -> evalIntegrator (head ss) m
-      Differentiator  -> evalDiff (head ss) m
-      Delay           -> evalDel (head ss) m
-      Output          -> evalOut (head ss) m
-
+instance Ord Module where
+  (<=) m1 m2 =
+    m1^.mID <= m2^.mID
 
 -- Peek at a module's output value
+
 getValue :: Module -> Sample 
 getValue m = S.index (m^.buffer) 0
 
 
 -- CONSTANT
+
 makeConst :: String -> Sample -> Module
 makeConst = \name value -> Module
-  { _buffer = pure value 
+  { _buffer = pure $ clamp value 
   ,  _mType = Constant
   ,    _mID = name
   }
 
 
 -- ADDER
+
 makeAdd :: String -> Module
 makeAdd = \s -> Module
   { _buffer = pure 0.0
@@ -73,10 +85,11 @@ makeAdd = \s -> Module
   }
 
 evalAdd :: [Sample] -> Module -> Module
-evalAdd ss = set buffer $ pure $ sum ss
+evalAdd ss = set buffer $ pure $ clamp $ sum ss
 
 
 -- MULTIPLIER
+
 makeMul :: String -> Module
 makeMul = \s -> Module
   { _buffer = pure 0.0
@@ -85,10 +98,11 @@ makeMul = \s -> Module
   }
 
 evalMul :: [Sample] -> Module -> Module
-evalMul ss = set buffer $ pure $ product ss
+evalMul ss = set buffer $ pure $ clamp $ product ss
 
 
 -- INVERTER
+
 makeInv :: String -> Module
 makeInv = \s -> Module
   { _buffer = pure 0.0
@@ -99,8 +113,35 @@ makeInv = \s -> Module
 evalInv :: Sample -> Module -> Module
 evalInv s = set buffer $ pure $ negate s
 
+{--
+-- ATTENUATOR
+
+makeAtt :: String -> Module
+makeAtt = \s -> Module
+  { _buffer = pure 0.0
+  ,  _mType = Attenuator
+  ,    _mID = s
+  }
+
+evalAtt :: Sample -> Module -> Module
+evalAtt = undefined
+--evalAtt s = set buffer $ pure $ clamp $ s * 
+--}
+
+-- ABSOLUTE VALUE 
+
+makeAbs :: String -> Module
+makeAbs = \s -> Module
+  { _buffer = pure 0.0
+  ,  _mType = Absolute
+  ,    _mID = s
+  }
+
+evalAbs :: Sample -> Module -> Module
+evalAbs s = set buffer $ pure $ abs s
 
 -- INTEGRATOR
+
 makeIntegrator :: String -> Module
 makeIntegrator s = Module
   { _buffer = pure 0.0
@@ -109,7 +150,7 @@ makeIntegrator s = Module
   }
 
 evalIntegrator :: Sample -> Module -> Module
-evalIntegrator s = over buffer $ fmap (s +) 
+evalIntegrator s = over buffer $ fmap $ clamp . (s +) 
 
 
 -- Differentiator
@@ -122,10 +163,11 @@ makeDiff = \s -> Module
   }
 
 evalDiff :: Sample -> Module -> Module
-evalDiff s = over buffer $ fmap (s -)
+evalDiff s = over buffer $ fmap $ clamp . (s -)
 
 
 -- DELAY
+
 makeDel :: String -> Int -> Module
 makeDel = \s i -> Module
   { _buffer = S.replicate i 0.0
@@ -138,6 +180,7 @@ evalDel s = over buffer $ S.drop 1 . (|> s)
 
 
 -- OUTPUT
+
 makeOut :: String -> Module
 makeOut = \s -> Module
   { _buffer = S.empty

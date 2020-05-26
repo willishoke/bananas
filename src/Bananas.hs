@@ -4,74 +4,98 @@ module Bananas where
 
 import Parser
 import Module
-import Data.Word
+
+import Data.Char (isDigit)
 import Data.Text (Text)
 import Algebra.Graph.AdjacencyMap
+import System.Environment
 import Control.Monad.State
-import Codec.Audio.Wave
 import Data.Attoparsec.Text
-import Control.Applicative ((<|>))
-import Control.Lens
-import qualified Data.Sequence as Seq
-import qualified Data.Map as M
+import Control.Lens hiding (transform)
+import Data.Set (toList)
 
--- Time flows in discrete units.
-
-type Time = Int
-
--- A signal is just a list of samples (floating point values)
-
-type Signal = [Sample]
+import qualified Data.Sequence as S
 
 
--- This represents the state of our program.
+type Program = StateT CompState IO ()
 
-data CompState = CompState
-  { network :: AdjacencyMap Module
-  , modules :: M.Map String Module 
-  }
 
-initState :: CompState
-initState = CompState
-  { network = empty
-  , modules = M.empty
-  }
+-- MAIN
 
 main :: IO ()
-main = do 
-  runStateT prog initState
-  return ()
+main = do
+  args <- getArgs
+  if length args < 2 || not (all isDigit $ args !! 1)
+    then error "Usage" 
+    else do
+      runStateT runComp initState
+      return ()
 
--- liftIO $ print "hello" -- to do IO stuff
-
+{--
 stack example:
   (x:xs) <- get
   put xs
   return x
+--}
 
--- First step is to gmap an evaluation function over the entire network.
--- You want to grab the postset of each element.
--- (This is sad, because it would be way more straightforward
--- to flip all the arrows and use the preset, but this is
--- more computationally efficient: logarithmic time to find
--- successors of a vertex vs linearithmic time to find predecessors)
--- Next we have to map over the postset.
+
+-- STEP
+-- Perform a single computation over the ASG
+-- First step is to grab the postset of each element.
+-- Convert to list, then grab all the buffers.
+-- Find their first elements. These get passed along to be evaluated.
+-- Thanks to pointfree.io for helping remove all the extra lambdas.
 
 step :: CompState -> CompState
-step = undefined
+step = over network transform
 
-type Program = StateT CompState IO ()
+transform :: AdjacencyMap Module -> AdjacencyMap Module
+transform ms =
+  flip gmap ms $
+    let f = toList . flip postSet ms
+        g = map $ flip S.index 0 . (^.buffer)
+    in g . f >>= eval 
 
-prog :: Program
-prog = do
-  liftIO $ print "Hello"
+
+-- EVAL
+-- Change state of a module on input
+
+eval :: [Sample] -> Module -> Module
+eval ss m
+  | null ss = m -- No incoming connections
+  | otherwise = case m^.mType of
+      Constant        -> m
+      Adder           -> evalAdd ss m 
+      Multiplier      -> evalMul ss m 
+      Inverter        -> evalInv (head ss) m
+      Absolute        -> evalAbs (head ss) m
+      Integrator      -> evalIntegrator (head ss) m
+      Differentiator  -> evalDiff (head ss) m
+      Delay           -> evalDel (head ss ) m
+      Output          -> evalOut (head ss) m
+
+
+runComp :: Program
+runComp = do
+  liftIO $ mapM_ putStrLn bananas
+  pState <- get
+  let g = pState^.network
   return ()
 
 -- Given a file name, attempt to get the contents of the file.
 
-readBLISP :: String -> IO (AdjacencyMap Module)
+readBLISP :: String -> IO Text
 readBLISP fileName = do
   contents <- readFile fileName
-  pure empty -- invoke parser here
+  pure "" -- invoke parser here
 
-END
+
+b1 = "🍌🍌🍌      🍌     🍌    🍌     🍌     🍌    🍌     🍌     🍌🍌🍌 "
+b2 = "🍌   🍌    🍌🍌    🍌🍌  🍌    🍌🍌    🍌🍌  🍌    🍌🍌   🍌      "
+b3 = "🍌🍌🍌    🍌🍌🍌   🍌 🍌 🍌   🍌🍌🍌   🍌 🍌 🍌   🍌🍌🍌   🍌🍌🍌 "
+b4 = "🍌   🍌  🍌    🍌  🍌  🍌🍌  🍌    🍌  🍌  🍌🍌  🍌    🍌       🍌"
+b5 = "🍌🍌🍌   🍌    🍌  🍌    🍌  🍌    🍌  🍌    🍌  🍌    🍌  🍌🍌🍌 "
+
+bananas = [b1, b2, b3, b4, b5]
+
+-- END
