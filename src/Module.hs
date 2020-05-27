@@ -30,6 +30,7 @@ data MType
   | Integrator
   | Differentiator
   | Delay
+  | Clock
   | Output
   deriving (Show, Eq)
 
@@ -64,7 +65,8 @@ instance Show Module where
     <> " " 
     <> (m^.mID) 
     <> " = " 
-    <> (show $ S.index (m^.buffer) 0)
+    <> if null (m^.buffer) then "empty" 
+         else show $ S.index (m^.buffer) 0
 
 -- Peek at a module's output value
 
@@ -135,28 +137,28 @@ evalAbs s = set buffer $ pure $ abs s
 
 -- INTEGRATOR
 
-makeIntegrator :: String -> Module
-makeIntegrator s = Module
+makeInt :: String -> Module
+makeInt s = Module
   { _buffer = pure 0.0
   ,  _mType = Integrator
   ,    _mID = s
   }
 
-evalIntegrator :: Sample -> Module -> Module
-evalIntegrator s = over buffer $ fmap $ clamp . (s +) 
+evalInt :: Sample -> Module -> Module
+evalInt s = over buffer $ fmap $ clamp . (+ (s/100)) 
 
 
 -- Differentiator
 
-makeDiff :: String -> Module
-makeDiff = \s -> Module
+makeDif :: String -> Module
+makeDif = \s -> Module
   { _buffer = pure 0.0
   ,  _mType = Differentiator 
   ,    _mID = s
   }
 
-evalDiff :: Sample -> Module -> Module
-evalDiff s = over buffer $ fmap $ clamp . (s -)
+evalDif :: Sample -> Module -> Module
+evalDif s = over buffer $ fmap $ clamp . (s -)
 
 
 -- DELAY
@@ -172,6 +174,23 @@ evalDel :: Sample -> Module -> Module
 evalDel s = over buffer $ S.drop 1 . (|> s) 
 
 
+-- CLOCK 
+
+makeClk :: String -> Int -> Module
+makeClk = \s i -> Module
+  { _buffer = S.fromList [1.0, 0.0, fromIntegral i]
+  ,  _mType = Clock
+  ,    _mID = s
+  }
+
+evalClk :: Module -> Module
+evalClk = over buffer $ \b ->
+  let first = if (round second == 0) then negate $ S.index b 0 else S.index b 0
+      second = fromIntegral $ (succ $ round $ S.index b 1) `mod` round third
+      third = S.index b 2
+  in S.fromList [first, second, third]
+
+
 -- OUTPUT
 
 makeOut :: String -> Module
@@ -183,6 +202,7 @@ makeOut = \s -> Module
 
 evalOut :: Sample -> Module -> Module
 evalOut s = over buffer $ (|> s)
+
 
 
 -- END

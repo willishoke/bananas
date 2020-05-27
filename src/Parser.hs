@@ -11,7 +11,7 @@ import Data.Text (Text, unpack, lines)
 import Algebra.Graph.AdjacencyMap
 import Data.Attoparsec.Text
 import Control.Lens
-import Control.Applicative ((<|>), (<*))
+import Control.Applicative ((<|>))
 
 import qualified Data.Map as M
 
@@ -65,6 +65,7 @@ mTypeParser =
   <|> (string "Int" >> pure Integrator)
   <|> (string "Dif" >> pure Differentiator)
   <|> (string "Del" >> pure Delay)
+  <|> (string "Clk" >> pure Clock)
   <|> (string "Out" >> pure Output)
 
 nameParser :: Parser String 
@@ -111,21 +112,21 @@ connParser c = do
     then fail (m1 <> " not declared")
     else if not (M.member m2 ms) 
            then fail (m2 <> " not declared")
-           else pure $ flip (over network) c $ overlay $
-                  connect (vertex $ ms M.! m2) 
-                          (vertex $ ms M.! m1)
+           else pure $ flip (over network) c $ overlay $ connect
+                  (vertex $ ms M.! m2) 
+                  (vertex $ ms M.! m1)
 
 connWithConstParser :: CompState -> Parser CompState
-connWithConstParser c  = do
+connWithConstParser c = do
   let ms = c^.modules
   n <- double 
   takeWhile1 isSpace
   m1 <- nameParser
   if not (M.member m1 ms)
     then fail (m1 <> " not declared")
-    else pure $ flip (over network) c $ overlay $
-                  connect (vertex $ ms M.! m1)
-                          (vertex $ makeConst (show n) n) 
+    else pure $ flip (over network) c $ overlay $ connect
+           (vertex $ ms M.! m1)
+           (vertex $ makeConst (show n) n) 
 
 lineParser :: CompState -> Parser CompState
 lineParser c =
@@ -141,14 +142,15 @@ create t s =
     Multiplier      -> Just $ makeMul s
     Inverter        -> Just $ makeInv s
     Absolute        -> Just $ makeAbs s
-    Integrator      -> Just $ makeIntegrator s
-    Differentiator  -> Just $ makeDiff s
+    Integrator      -> Just $ makeInt s
+    Differentiator  -> Just $ makeDif s
     Output          -> Just $ makeOut s
     _               -> Nothing
 
 createWithIntParam :: MType -> String -> Int -> Maybe Module
 createWithIntParam t s i =
   case t of
-    Delay    -> Just $ makeDel s i
-    _        -> Nothing
+    Delay -> Just $ makeDel s i
+    Clock -> Just $ makeClk s i
+    _     -> Nothing
 

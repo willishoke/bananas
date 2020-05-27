@@ -11,11 +11,11 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 executable banana
-  exposed-modules:     Module Parser
+  other-modules:       Module, Parser
   hs-source-dirs:      src
   main-is:             Bananas.hs
   default-language:    Haskell2010
-  ghc-options:        -O2, -fwarn-incomplete-patterns
+  ghc-options:         -fwarn-incomplete-patterns
   build-depends:       base >= 4.7 && < 5,
                        WAVE == 0.1.6,
                        algebraic-graphs,

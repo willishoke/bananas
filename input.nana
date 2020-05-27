@@ -1,6 +1,28 @@
-Int a
-Int b
-Out c
-0.001 a
-a b
-b c
+Add finalMixer
+Out o
+finalMixer o
+Clk 100 ca
+Clk 201 cb
+Clk 399 cc
+Clk 799 cd
+Int ia
+Int ib
+Int ic
+Int id
+Add aa
+Add ab
+ca aa
+cb ab
+cc aa
+cd ab
+aa ia
+ab ib
+Mul ma
+aa ma
+ab ma
+Del 100 da
+ma da
+Int in
+ma in
+in finalMixer
+da finalMixer

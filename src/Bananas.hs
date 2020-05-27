@@ -1,7 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Bananas where
-
 import Parser
 import Module
 
@@ -12,7 +10,6 @@ import Data.Text.IO (readFile)
 import Algebra.Graph.AdjacencyMap
 import System.Environment
 import Control.Monad.State
-import Data.Attoparsec.Text
 import Control.Lens hiding (transform)
 import Data.Foldable (toList)
 import Data.WAVE
@@ -46,7 +43,12 @@ runComp = do
   pText <- liftIO $ readFile fileName
   pState <- get
   let seed = parseLines (lines pText) pState 
-      sound = getOutput $ comp 1000 seed
+      computed = comp iterations seed
+      sound = getOutput computed
+  --liftIO $ print seed
+  --liftIO $ print computed
+  --liftIO $ print $ length $ head $ sound
+  --liftIO $ print $ take 100 $ head $ sound
   liftIO $ toWave sound
   return ()
 
@@ -83,9 +85,9 @@ toWave :: [[Sample]] -> IO ()
 toWave = \ss ->
   let raw = map (map $ doubleToSample . (/2.0) . (+1)) ss
       h = WAVEHeader
-            { waveNumChannels = length $ raw
-            , waveFrameRate = 44100
-            , waveBitsPerSample = 16
+            { waveNumChannels = 1
+            , waveFrameRate = 20000
+            , waveBitsPerSample = 8
             , waveFrames = Just $ length $ head raw
             }
       w = WAVE { waveHeader = h, waveSamples = raw }
@@ -96,18 +98,17 @@ toWave = \ss ->
 -- Change state of a module on input
 
 eval :: [Sample] -> Module -> Module
-eval ss m
-  | null ss = m -- No incoming connections
-  | otherwise = case m^.mType of
-      Constant        -> m
-      Adder           -> evalAdd ss m 
-      Multiplier      -> evalMul ss m 
-      Inverter        -> evalInv (head ss) m
-      Absolute        -> evalAbs (head ss) m
-      Integrator      -> evalIntegrator (head ss) m
-      Differentiator  -> evalDiff (head ss) m
-      Delay           -> evalDel (head ss ) m
-      Output          -> evalOut (head ss) m
+eval ss m = case m^.mType of
+  Constant        -> m
+  Adder           -> if null ss then m else evalAdd ss m 
+  Multiplier      -> if null ss then m else evalMul ss m 
+  Inverter        -> if null ss then m else evalInv (head ss) m
+  Absolute        -> if null ss then m else evalAbs (head ss) m
+  Integrator      -> if null ss then m else evalInt (head ss) m
+  Differentiator  -> if null ss then m else evalDif (head ss) m
+  Delay           -> if null ss then m else evalDel (head ss) m
+  Clock           -> evalClk m
+  Output          -> if null ss then m else evalOut (head ss) m
 
 
 
