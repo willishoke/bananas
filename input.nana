@@ -1,6 +1,6 @@
-Add a
-Mul m
-Int i
-i a
-i i
-a m
+Int a
+Int b
+Out c
+0.001 a
+a b
+b c

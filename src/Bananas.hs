@@ -5,14 +5,17 @@ module Bananas where
 import Parser
 import Module
 
+import Prelude hiding (readFile, lines)
 import Data.Char (isDigit)
-import Data.Text (Text)
+import Data.Text (Text, lines)
+import Data.Text.IO (readFile)
 import Algebra.Graph.AdjacencyMap
 import System.Environment
 import Control.Monad.State
 import Data.Attoparsec.Text
 import Control.Lens hiding (transform)
-import Data.Set (toList)
+import Data.Foldable (toList)
+import Data.WAVE
 
 import qualified Data.Sequence as S
 
@@ -24,20 +27,33 @@ type Program = StateT CompState IO ()
 
 main :: IO ()
 main = do
+  runStateT runComp initState
+  return ()
+
+
+parseArgs :: IO (String, Int)
+parseArgs = do
   args <- getArgs
   if length args < 2 || not (all isDigit $ args !! 1)
     then error "Usage" 
-    else do
-      runStateT runComp initState
-      return ()
+    else pure (args !! 0, read $ args !! 1)
 
-{--
-stack example:
-  (x:xs) <- get
-  put xs
-  return x
---}
 
+runComp :: Program
+runComp = do
+  liftIO $ mapM_ putStrLn bananas
+  (fileName, iterations) <- liftIO parseArgs
+  pText <- liftIO $ readFile fileName
+  pState <- get
+  let seed = parseLines (lines pText) pState 
+      sound = getOutput $ comp 1000 seed
+  liftIO $ toWave sound
+  return ()
+
+comp :: Int -> CompState -> CompState 
+comp i c
+  | i <= 0 = c
+  | otherwise = comp (pred i) (step c)
 
 -- STEP
 -- Perform a single computation over the ASG
@@ -51,10 +67,29 @@ step = over network transform
 
 transform :: AdjacencyMap Module -> AdjacencyMap Module
 transform ms =
-  flip gmap ms $
-    let f = toList . flip postSet ms
-        g = map $ flip S.index 0 . (^.buffer)
-    in g . f >>= eval 
+  flip gmap ms $ g . f >>= eval where
+    f = toList . flip postSet ms
+    g = map $ flip S.index 0 . (^.buffer)
+
+     
+getOutput :: CompState -> [[Sample]]
+getOutput c =
+  let ms = vertexList (c^.network)
+      outs = filter (\v -> v^.mType == Output) ms
+  in map (toList . (^.buffer)) outs
+
+
+toWave :: [[Sample]] -> IO ()
+toWave = \ss ->
+  let raw = map (map $ doubleToSample . (/2.0) . (+1)) ss
+      h = WAVEHeader
+            { waveNumChannels = length $ raw
+            , waveFrameRate = 44100
+            , waveBitsPerSample = 16
+            , waveFrames = Just $ length $ head raw
+            }
+      w = WAVE { waveHeader = h, waveSamples = raw }
+  in putWAVEFile "test.wav" w
 
 
 -- EVAL
@@ -74,20 +109,6 @@ eval ss m
       Delay           -> evalDel (head ss ) m
       Output          -> evalOut (head ss) m
 
-
-runComp :: Program
-runComp = do
-  liftIO $ mapM_ putStrLn bananas
-  pState <- get
-  let g = pState^.network
-  return ()
-
--- Given a file name, attempt to get the contents of the file.
-
-readBLISP :: String -> IO Text
-readBLISP fileName = do
-  contents <- readFile fileName
-  pure "" -- invoke parser here
 
 
 b1 = "🍌🍌🍌      🍌     🍌    🍌     🍌     🍌    🍌     🍌     🍌🍌🍌 "

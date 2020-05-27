@@ -9,7 +9,7 @@ import Control.Lens hiding (Const)
 import qualified Data.Sequence as S
 
 
-type Sample = Float 
+type Sample = Double
 
 
 -- The value of a sample is limited to the range [-1.0, 1.0]
@@ -47,7 +47,6 @@ data Module = Module
   ,  _mType :: MType        -- Type tag
   ,    _mID :: String       -- Module ID
   }
-  deriving (Show)
 
 makeLenses ''Module
 
@@ -58,6 +57,14 @@ instance Eq Module where
 instance Ord Module where
   (<=) m1 m2 =
     m1^.mID <= m2^.mID
+
+instance Show Module where
+  show m = 
+       (show $ m^.mType) 
+    <> " " 
+    <> (m^.mID) 
+    <> " = " 
+    <> (show $ S.index (m^.buffer) 0)
 
 -- Peek at a module's output value
 
@@ -113,20 +120,6 @@ makeInv = \s -> Module
 evalInv :: Sample -> Module -> Module
 evalInv s = set buffer $ pure $ negate s
 
-{--
--- ATTENUATOR
-
-makeAtt :: String -> Module
-makeAtt = \s -> Module
-  { _buffer = pure 0.0
-  ,  _mType = Attenuator
-  ,    _mID = s
-  }
-
-evalAtt :: Sample -> Module -> Module
-evalAtt = undefined
---evalAtt s = set buffer $ pure $ clamp $ s * 
---}
 
 -- ABSOLUTE VALUE 
 

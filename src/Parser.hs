@@ -5,12 +5,13 @@ module Parser where
 
 import Module
 
+import Prelude hiding (lines)
 import Data.Char (isAlpha, isSpace)
-import Data.Text (unpack)
+import Data.Text (Text, unpack, lines)
 import Algebra.Graph.AdjacencyMap
 import Data.Attoparsec.Text
 import Control.Lens
-import Control.Applicative ((<|>))
+import Control.Applicative ((<|>), (<*))
 
 import qualified Data.Map as M
 
@@ -34,6 +35,7 @@ data CompState = CompState
   { _network :: AdjacencyMap Module
   , _modules :: M.Map String Module
   }
+  deriving (Eq, Show)
 
 makeLenses ''CompState
 
@@ -43,24 +45,15 @@ initState = CompState
   , _modules = M.empty
   }
 
-parseWithState :: CompState -> Parser CompState
-parseWithState s = undefined
-  
-
-parseProgram :: Parser CompState
-parseProgram = parseWithState initState
- {-- 
-  = Constant
-  | Adder
-  | Multiplier
-  | Inverter
-  | Attenuator
-  | Absolute
-  | Integrator
-  | Differentiator
-  | Delay
-  | Output
---}
+parseLines :: [Text] -> CompState -> CompState
+parseLines xs c
+  | null xs = c
+  | otherwise = 
+      let res = parseOnly (lineParser c) (head xs)
+      in case res of
+        Right r -> parseLines (tail xs) r
+        Left l  -> error l
+      
 
 mTypeParser :: Parser MType
 mTypeParser =
@@ -76,7 +69,7 @@ mTypeParser =
 
 nameParser :: Parser String 
 nameParser = do
-  txt <- takeWhile1 isAlpha 
+  txt <- takeWhile1 isAlpha
   pure $ unpack txt
 
 mapWithIntParamParser ::
@@ -98,6 +91,7 @@ mapParser c = do
   t <- mTypeParser
   takeWhile1 isSpace
   n <- nameParser
+  endOfInput
   if M.member n (c^.modules)
     then fail ("Duplicate module name " <> n)
     else let m = create t n in case m of
@@ -117,13 +111,26 @@ connParser c = do
     then fail (m1 <> " not declared")
     else if not (M.member m2 ms) 
            then fail (m2 <> " not declared")
-           else pure $ over network (overlay 
-                  (connect (vertex $ ms M.! m2) 
-                           (vertex $ ms M.! m1))) c
+           else pure $ flip (over network) c $ overlay $
+                  connect (vertex $ ms M.! m2) 
+                          (vertex $ ms M.! m1)
+
+connWithConstParser :: CompState -> Parser CompState
+connWithConstParser c  = do
+  let ms = c^.modules
+  n <- double 
+  takeWhile1 isSpace
+  m1 <- nameParser
+  if not (M.member m1 ms)
+    then fail (m1 <> " not declared")
+    else pure $ flip (over network) c $ overlay $
+                  connect (vertex $ ms M.! m1)
+                          (vertex $ makeConst (show n) n) 
 
 lineParser :: CompState -> Parser CompState
 lineParser c =
       (connParser c)
+  <|> (connWithConstParser c)
   <|> (mapParser c)
   <|> (mapWithIntParamParser c)
 
