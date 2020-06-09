@@ -17,6 +17,18 @@ import Data.WAVE
 import qualified Data.Sequence as S
 
 
+b1 = "🍌🍌🍌      🍌     🍌    🍌     🍌     🍌    🍌     🍌     🍌🍌🍌 "
+b2 = "🍌   🍌    🍌🍌    🍌🍌  🍌    🍌🍌    🍌🍌  🍌    🍌🍌   🍌      "
+b3 = "🍌🍌🍌    🍌🍌🍌   🍌 🍌 🍌   🍌🍌🍌   🍌 🍌 🍌   🍌🍌🍌   🍌🍌🍌 "
+b4 = "🍌   🍌  🍌    🍌  🍌  🍌🍌  🍌    🍌  🍌  🍌🍌  🍌    🍌       🍌"
+b5 = "🍌🍌🍌   🍌    🍌  🍌    🍌  🍌    🍌  🍌    🍌  🍌    🍌  🍌🍌🍌 "
+
+bananas = [b1, b2, b3, b4, b5]
+
+
+-- right now there isn't much point in having state stick around,
+-- but if the compiler were interactive, this would be useful
+
 type Program = StateT CompState IO ()
 
 
@@ -28,13 +40,17 @@ main = do
   return ()
 
 
+-- check to make sure command line args are well-formed
+
 parseArgs :: IO (String, Int)
 parseArgs = do
   args <- getArgs
-  if length args < 2 || not (all isDigit $ args !! 1)
-    then error "Usage" 
-    else pure (args !! 0, read $ args !! 1)
+  when (length args < 2 || not (all isDigit $ args !! 1)) $
+    error "Usage: stack run <filename.nana> <iterations>" 
+  pure (args !! 0, read $ args !! 1)
 
+
+-- program definition
 
 runComp :: Program
 runComp = do
@@ -45,27 +61,27 @@ runComp = do
   let seed = parseLines (lines pText) pState 
       computed = comp iterations seed
       sound = getOutput computed
-  --liftIO $ print seed
-  --liftIO $ print computed
-  --liftIO $ print $ length $ head $ sound
-  --liftIO $ print $ take 100 $ head $ sound
   liftIO $ toWave sound
   return ()
+
+
+-- perform all steps of computation
 
 comp :: Int -> CompState -> CompState 
 comp i c
   | i <= 0 = c
   | otherwise = comp (pred i) (step c)
 
--- STEP
--- Perform a single computation over the ASG
--- First step is to grab the postset of each element.
--- Convert to list, then grab all the buffers.
--- Find their first elements. These get passed along to be evaluated.
--- Thanks to pointfree.io for helping remove all the extra lambdas.
+
+-- perform a single step of computation over the ASG
 
 step :: CompState -> CompState
 step = over network transform
+
+-- first step is to grab the postset of each element
+-- convert to list, then grab all the buffers
+-- find their first elements. these get passed along to be evaluated
+-- thanks to pointfree.io for helping remove all the extra lambdas
 
 transform :: AdjacencyMap Module -> AdjacencyMap Module
 transform ms =
@@ -73,6 +89,9 @@ transform ms =
     f = toList . flip postSet ms
     g = map $ flip S.index 0 . (^.buffer)
 
+
+-- grab all samples from the output buffers and convert to list
+-- vector would be more efficient but WAVE expects lists
      
 getOutput :: CompState -> [[Sample]]
 getOutput c =
@@ -81,21 +100,22 @@ getOutput c =
   in map (toList . (^.buffer)) outs
 
 
+-- generate a .wav file from raw data
+
 toWave :: [[Sample]] -> IO ()
 toWave = \ss ->
   let raw = map (map $ doubleToSample . (/2.0) . (+1)) ss
       h = WAVEHeader
-            { waveNumChannels = 1
-            , waveFrameRate = 20000
-            , waveBitsPerSample = 8
-            , waveFrames = Just $ length $ head raw
-            }
+        { waveNumChannels = length raw
+        , waveFrameRate = sampleRate
+        , waveBitsPerSample = 16
+        , waveFrames = Just $ length $ head raw
+        }
       w = WAVE { waveHeader = h, waveSamples = raw }
   in putWAVEFile "test.wav" w
 
 
--- EVAL
--- Change state of a module on input
+-- change state of a module on input
 
 eval :: [Sample] -> Module -> Module
 eval ss m = case m^.mType of
@@ -108,16 +128,8 @@ eval ss m = case m^.mType of
   Differentiator  -> if null ss then m else evalDif (head ss) m
   Delay           -> if null ss then m else evalDel (head ss) m
   Clock           -> evalClk m
+  Sine            -> evalSin m
   Output          -> if null ss then m else evalOut (head ss) m
 
-
-
-b1 = "🍌🍌🍌      🍌     🍌    🍌     🍌     🍌    🍌     🍌     🍌🍌🍌 "
-b2 = "🍌   🍌    🍌🍌    🍌🍌  🍌    🍌🍌    🍌🍌  🍌    🍌🍌   🍌      "
-b3 = "🍌🍌🍌    🍌🍌🍌   🍌 🍌 🍌   🍌🍌🍌   🍌 🍌 🍌   🍌🍌🍌   🍌🍌🍌 "
-b4 = "🍌   🍌  🍌    🍌  🍌  🍌🍌  🍌    🍌  🍌  🍌🍌  🍌    🍌       🍌"
-b5 = "🍌🍌🍌   🍌    🍌  🍌    🍌  🍌    🍌  🍌    🍌  🍌    🍌  🍌🍌🍌 "
-
-bananas = [b1, b2, b3, b4, b5]
 
 -- END

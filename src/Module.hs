@@ -5,18 +5,12 @@ module Module where
 
 -- IMPORTS
 
-import Control.Lens hiding (Const)
+import Control.Lens
 import qualified Data.Sequence as S
 
 
 type Sample = Double
-
-
--- The value of a sample is limited to the range [-1.0, 1.0]
--- Clamp function gets applied anytime we evaluate 
-
-clamp :: Sample -> Sample
-clamp = min 1.0 . max (-1.0)
+sampleRate = 44100 :: Int
 
 
 -- Module Types
@@ -31,6 +25,7 @@ data MType
   | Differentiator
   | Delay
   | Clock
+  | Sine 
   | Output
   deriving (Show, Eq)
 
@@ -68,10 +63,18 @@ instance Show Module where
     <> if null (m^.buffer) then "empty" 
          else show $ S.index (m^.buffer) 0
 
--- Peek at a module's output value
+-- peek at a module's output value
+-- (whatever's at the front)
 
 getValue :: Module -> Sample 
 getValue m = S.index (m^.buffer) 0
+
+
+-- the value of a sample is limited to the range [-1.0, 1.0]
+-- clamp function gets applied anytime we evaluate 
+
+clamp :: Sample -> Sample
+clamp = min 1.0 . max (-1.0)
 
 
 -- CONSTANT
@@ -148,7 +151,7 @@ evalInt :: Sample -> Module -> Module
 evalInt s = over buffer $ fmap $ clamp . (+ (s/100)) 
 
 
--- Differentiator
+-- DIFFERENTIATOR
 
 makeDif :: String -> Module
 makeDif = \s -> Module
@@ -183,12 +186,44 @@ makeClk = \s i -> Module
   ,    _mID = s
   }
 
+-- First value is output value
+-- Second value is counter
+-- Third value determines period
+
 evalClk :: Module -> Module
 evalClk = over buffer $ \b ->
-  let first = if (round second == 0) then negate $ S.index b 0 else S.index b 0
-      second = fromIntegral $ (succ $ round $ S.index b 1) `mod` round third
+  let first = if second == 0 then negate $ S.index b 0 else S.index b 0
+      second = mod (succ $ round $ S.index b 1) (round third) :: Int
       third = S.index b 2
+  in S.fromList [first, fromIntegral second, third]
+
+
+-- SINE 
+
+makeSin :: String -> Int -> Module
+makeSin = \s i -> 
+  let stepSize = 1.0 / (fromIntegral i)
+  in Module
+  { _buffer = S.fromList [0.0, 0.0, stepSize]
+  ,  _mType = Sine 
+  ,    _mID = s
+  }
+
+-- First value is output
+-- Second value is underlying triangle wave
+-- Third value is amount to ascend / descend
+
+evalSin :: Module -> Module
+evalSin = over buffer $ \b ->
+  let tri = S.index b 1
+      inc = S.index b 2
+      first = clamp $ sin second
+      second = clamp $ tri + inc
+      third = if second == 1.0 || second == -1.0 
+                 then negate inc
+                 else inc
   in S.fromList [first, second, third]
+
 
 
 -- OUTPUT
