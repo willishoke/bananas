@@ -1,10 +1,6 @@
-o : OUT
-s0 : CLK 200
-s1 : SIN 400
-d : DEL 40
-a : ADD
-s1 a
-s0 a
-s0 d
-d a
-a o
+o1 : OUT
+s1 : SIN 440
+d1 : DEL 10
+s1 d1
+d1 s1
+d1 o1

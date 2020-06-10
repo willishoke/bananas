@@ -46,6 +46,9 @@ data Module = Module
 
 makeLenses ''Module
 
+
+-- two modules are deemed equivalent if they have the same name
+
 instance Eq Module where
   (==) m1 m2 =
     m1^.mID == m2^.mID
@@ -173,6 +176,9 @@ makeDel = \s i -> Module
   ,    _mID = s
   }
 
+-- drop the sample at the front of the queue
+-- add a sample to the end
+
 evalDel :: Sample -> Module -> Module
 evalDel s = over buffer $ S.drop 1 . (|> s) 
 
@@ -186,9 +192,9 @@ makeClk = \s i -> Module
   ,    _mID = s
   }
 
--- First value is output value
--- Second value is counter
--- Third value determines period
+-- first value is output value
+-- second value is counter
+-- third value determines period
 
 evalClk :: Module -> Module
 evalClk = over buffer $ \b ->
@@ -209,21 +215,30 @@ makeSin = \s i ->
   ,    _mID = s
   }
 
--- First value is output
--- Second value is underlying triangle wave
--- Third value is amount to ascend / descend
+-- first value is output
+-- second value is underlying triangle wave
+-- third value is amount to ascend / descend
+-- when input is received, the underlying wave is attenuated
 
-evalSin :: Module -> Module
-evalSin = over buffer $ \b ->
+evalSin :: Sample -> Module -> Module
+evalSin s = over buffer $ \b ->
+{--
+  let first = clamp $ S.index b 0
+      second = S.index b 1
+      value = clamp $ sin $ first + s*second
+      step = if first == 1.0 && step > 0.0 || first == -1.0 && step < 1.0 
+        then negate second
+        else second
+  in S.fromList [value, step]
+--}
   let tri = S.index b 1
       inc = S.index b 2
-      first = clamp $ sin second
-      second = clamp $ tri + inc
+      first = clamp $ sin $ tri + s * inc
+      second = clamp $ tri + s * inc
       third = if second == 1.0 || second == -1.0 
                  then negate inc
                  else inc
   in S.fromList [first, second, third]
-
 
 
 -- OUTPUT
@@ -235,9 +250,10 @@ makeOut = \s -> Module
   ,    _mID = s
   }
 
+-- concatenate sample to end of buffer
+
 evalOut :: Sample -> Module -> Module
 evalOut s = over buffer $ (|> s)
-
 
 
 -- END

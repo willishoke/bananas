@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 import Parser
@@ -5,9 +6,10 @@ import Module
 
 import Prelude hiding (readFile, lines)
 import Data.Char (isDigit)
+import Data.List (transpose)
 import Data.Text (Text, lines)
 import Data.Text.IO (readFile)
-import Algebra.Graph.AdjacencyMap
+import Algebra.Graph.AdjacencyMap hiding (transpose)
 import System.Environment
 import Control.Monad.State
 import Control.Lens hiding (transform)
@@ -17,19 +19,24 @@ import Data.WAVE
 import qualified Data.Sequence as S
 
 
-b1 = "🍌🍌🍌      🍌     🍌    🍌     🍌     🍌    🍌     🍌     🍌🍌🍌 "
-b2 = "🍌   🍌    🍌🍌    🍌🍌  🍌    🍌🍌    🍌🍌  🍌    🍌🍌   🍌      "
-b3 = "🍌🍌🍌    🍌🍌🍌   🍌 🍌 🍌   🍌🍌🍌   🍌 🍌 🍌   🍌🍌🍌   🍌🍌🍌 "
-b4 = "🍌   🍌  🍌    🍌  🍌  🍌🍌  🍌    🍌  🍌  🍌🍌  🍌    🍌       🍌"
-b5 = "🍌🍌🍌   🍌    🍌  🍌    🍌  🍌    🍌  🍌    🍌  🍌    🍌  🍌🍌🍌 "
+--  🍌🍌🍌      🍌     🍌    🍌     🍌     🍌    🍌     🍌     🍌🍌🍌
+--  🍌   🍌    🍌🍌    🍌🍌  🍌    🍌🍌    🍌🍌  🍌    🍌🍌   🍌      
+--  🍌🍌🍌    🍌🍌🍌   🍌 🍌 🍌   🍌🍌🍌   🍌 🍌 🍌   🍌🍌🍌   🍌🍌🍌 
+--  🍌   🍌  🍌    🍌  🍌  🍌🍌  🍌    🍌  🍌  🍌🍌  🍌    🍌       🍌
+--  🍌🍌🍌   🍌    🍌  🍌    🍌  🍌    🍌  🍌    🍌  🍌    🍌  🍌🍌🍌 
 
-bananas = [b1, b2, b3, b4, b5]
+-- A LANGUAGE FOR SIMULATION OF ANALOG COMPUTATION
 
 
--- right now there isn't much point in having state stick around,
--- but if the compiler were interactive, this would be useful
+-- parsed command line args
 
-type Program = StateT CompState IO ()
+data Config = Config
+  { _infile :: String
+  , _outfile :: String
+  , _sampleCount :: Int
+  }
+
+makeLenses ''Config
 
 
 -- MAIN
@@ -42,26 +49,32 @@ main = do
 
 -- check to make sure command line args are well-formed
 
-parseArgs :: IO (String, Int)
+parseArgs :: IO Config
 parseArgs = do
   args <- getArgs
-  when (length args < 2 || not (all isDigit $ args !! 1)) $
-    error "Usage: stack run <filename.nana> <iterations>" 
-  pure (args !! 0, read $ args !! 1)
+  when (length args < 3 || not (all isDigit $ args !! 2)) $
+    error "Usage: stack run <filename.nana> <output.wave> <iterations>" 
+  pure $ Config
+    { _infile = args !! 0
+    , _outfile = "waveforms/" <> args !! 1
+    , _sampleCount = read $ args !! 2
+    } 
 
 
--- program definition
+-- right now there isn't much point in having state stick around,
+-- but if the compiler were interactive, this would be useful
+
+type Program = StateT CompState IO ()
 
 runComp :: Program
 runComp = do
-  liftIO $ mapM_ putStrLn bananas
-  (fileName, iterations) <- liftIO parseArgs
-  pText <- liftIO $ readFile fileName
+  config <- liftIO parseArgs
+  pText <- liftIO $ readFile $ config^.infile
   pState <- get
   let seed = parseLines (lines pText) pState 
-      computed = comp iterations seed
+      computed = comp (config^.sampleCount) seed
       sound = getOutput computed
-  liftIO $ toWave sound
+  liftIO $ toWave (config^.outfile) sound
   return ()
 
 
@@ -97,22 +110,22 @@ getOutput :: CompState -> [[Sample]]
 getOutput c =
   let ms = vertexList (c^.network)
       outs = filter (\v -> v^.mType == Output) ms
-  in map (toList . (^.buffer)) outs
+  in transpose $ map (toList . (^.buffer)) outs
 
 
 -- generate a .wav file from raw data
 
-toWave :: [[Sample]] -> IO ()
-toWave = \ss ->
-  let raw = map (map $ doubleToSample . (/2.0) . (+1)) ss
+toWave :: String -> [[Sample]] -> IO ()
+toWave = \filename samples ->
+  let raw = map (map $ doubleToSample . (/2.0)) samples
       h = WAVEHeader
-        { waveNumChannels = length raw
+        { waveNumChannels = length $ head raw
         , waveFrameRate = sampleRate
         , waveBitsPerSample = 16
-        , waveFrames = Just $ length $ head raw
+        , waveFrames = Just $ length raw
         }
       w = WAVE { waveHeader = h, waveSamples = raw }
-  in putWAVEFile "test.wav" w
+  in putWAVEFile filename w
 
 
 -- change state of a module on input
@@ -128,7 +141,7 @@ eval ss m = case m^.mType of
   Differentiator  -> if null ss then m else evalDif (head ss) m
   Delay           -> if null ss then m else evalDel (head ss) m
   Clock           -> evalClk m
-  Sine            -> evalSin m
+  Sine            -> if null ss then evalSin 1.0 m else evalSin (head ss) m
   Output          -> if null ss then m else evalOut (head ss) m
 
 
