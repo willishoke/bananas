@@ -1,6 +1,35 @@
 o1 : OUT
-s1 : SIN 440
-d1 : DEL 10
-s1 d1
-d1 s1
-d1 o1
+a1 : ADD
+m1 : MUL
+
+s1 : SIN 4400
+s2 : SIN 200
+s3 : SIN 301
+c1 : CLK 5000
+c2 : CLK 8400
+s4 : SIN 202
+s5 : SIN 100500
+s6 : SIN 50500
+i : INT
+inv : INV
+del : DEL 40
+a2 : ADD
+c1 i
+s1 s2
+s2 s4
+s3 m1
+s2 m1
+s5 m1
+s6 m1
+m1 a1
+m3 : MUL
+s6 m3
+clk : CLK 300
+clk m3
+m3 a1
+c2 del
+del inv
+c2 a2
+inv a2
+a2 s1
+a1 o1

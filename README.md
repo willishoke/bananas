@@ -29,4 +29,8 @@ To connect two modules `mult1` and `out1`, you can write:
 
 The parser is written with `Attoparsec`, a minimal and efficient monadic parsing library. Since "programs" for analog computers often contain feedback loops, the parser constructs not an AST (abstract syntax tree), but an ASG (abstract syntax graph).
 
-The compiler will compile `.nana` files. Output comes in the form of `.wav` files. This can be analyzed in any audio editing program, and in many cases produces interesting sonic artifacts.
+To compile, use the command
+
+`stack run <input.nana> <output.wav> <num_samples>`
+
+This will compile the input file and output a `.wav` file in the `waveforms` folder. This can be analyzed in any audio editing program, and in many cases produces interesting sonic artifacts.

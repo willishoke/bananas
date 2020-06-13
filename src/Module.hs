@@ -222,15 +222,6 @@ makeSin = \s i ->
 
 evalSin :: Sample -> Module -> Module
 evalSin s = over buffer $ \b ->
-{--
-  let first = clamp $ S.index b 0
-      second = S.index b 1
-      value = clamp $ sin $ first + s*second
-      step = if first == 1.0 && step > 0.0 || first == -1.0 && step < 1.0 
-        then negate second
-        else second
-  in S.fromList [value, step]
---}
   let tri = S.index b 1
       inc = S.index b 2
       first = clamp $ sin $ tri + s * inc
