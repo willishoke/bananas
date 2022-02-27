@@ -16,7 +16,7 @@ executable banana
   main-is:             Bananas.hs
   default-language:    Haskell2010
   ghc-options:         -fwarn-incomplete-patterns
-  build-depends:       base >= 4.7 && < 5,
+  build-depends:       base >= 4.7,
                        WAVE == 0.1.6,
                        algebraic-graphs,
                        mtl,
