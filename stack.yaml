@@ -41,6 +41,7 @@ packages:
 #
 extra-deps:
   - WAVE-0.1.6@sha256:f744ff68f5e3a0d1f84fab373ea35970659085d213aef20860357512d0458c5c,1016
+  - portaudio-0.2.4@sha256:f16a1102187ecc3f08a7510eda5b3081a8a21f2c49d7b4ab5e3cfa8666a81d63,959
  
 
 # Override default flag values for local packages and extra-deps

@@ -15,6 +15,7 @@ import Control.Monad.State
 import Control.Lens hiding (transform)
 import Data.Foldable (toList)
 import Data.WAVE
+import Brick
 
 import qualified Data.Sequence as S
 
@@ -38,15 +39,23 @@ data Config = Config
 
 makeLenses ''Config
 
+ui :: Widget ()
+ui = str "Hello, world!"
+
+
+data Test = Test { a :: String, b :: String } deriving (Show, Eq, Ord)
+
+main :: IO ()
+main = simpleMain ui
 
 -- MAIN
-
+{--
 main :: IO ()
 main = do
   runStateT runComp initState
   return ()
 
-
+--}
 -- check to make sure command line args are well-formed
 
 parseArgs :: IO Config

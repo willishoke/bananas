@@ -7,8 +7,11 @@ import Module
 
 import Prelude hiding (takeWhile)
 import Data.Char (isAlpha, isDigit, isSpace)
-import Algebra.Graph.AdjacencyMap
+
 import Data.Attoparsec.Text
+
+import Algebra.Graph.AdjacencyMap
+
 import Control.Lens
 import Control.Monad
 import Control.Applicative ((<|>))
